@@ -1,12 +1,13 @@
 import { useSwitchChain } from 'wagmi'
 import { useConfig } from 'wagmi'
 import { useChainId } from 'wagmi'
-import { useState, useEffect } from "react"
+import { useState } from "react"
+import { mainnet } from "viem/chains"
 
 export default function NetworkSwitch({ onNetworkSwitch }: { onNetworkSwitch?: (chainId: number) => void }) {
     const config = useConfig()
     const currentChainId = useChainId()
-    const [selectedChain, setSelectedChain] = useState(currentChainId)
+    const [selectedChain, setSelectedChain] = useState(currentChainId | mainnet.id)
     const { chains, switchChain } = useSwitchChain({ config })
 
     const handleNetworkSwitch = async (chainId: number) => {
