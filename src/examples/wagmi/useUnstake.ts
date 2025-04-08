@@ -3,8 +3,9 @@
 import { useWriteContract } from "wagmi"
 import ABI from "../../abis/burner.json"
 import { useAccount } from "wagmi"
+import { VARIABLES } from "@/src/constants"
 
-const useUnstake = (inputAmount: bigint, communityCode = "") => {
+const useUnstake = (inputAmount: bigint, communityCode = "", network: string) => {
   const { address } = useAccount()
   const args = [address, inputAmount, communityCode]
 
@@ -21,7 +22,7 @@ const useUnstake = (inputAmount: bigint, communityCode = "") => {
     console.log("useMinterToStake sendTransaction")
     if (writeContract) {
       writeContract({
-        address: process.env.NEXT_PUBLIC_CONTRACT_BURNER as `0x${string}`,
+        address: VARIABLES[network as keyof typeof VARIABLES]?.CONTRACT_BURNER as `0x${string}`,
         abi: ABI,
         functionName: "burnAndRedeemIfPossible",
         args,

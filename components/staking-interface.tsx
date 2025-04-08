@@ -15,8 +15,10 @@ import useStake from "@/src/examples/wagmi/useStake"
 import useUnstake from "@/src/examples/wagmi/useUnstake"
 import ABI_BURNER from "@/src/abis/burner.json"
 import { useAllowance, useApprove } from "@/src/examples/wagmi/useApprove"
+import { useAllowanceUnstake, useApproveUnstake } from "@/src/examples/wagmi/useApproveUnstake"
+import { VARIABLES } from "@/src/constants"
 
-export default function StakingInterface() {
+export default function StakingInterface({ network }: { network: string }) {
   const { address, isConnected } = useAccount()
   const { connectAsync, connectors, isPending: isConnectLoading, error: connectError } = useConnect()
   const { disconnect } = useDisconnect()
@@ -45,6 +47,7 @@ export default function StakingInterface() {
     refetch: refetchBalance,
   } = useBalanceElx({
     address: address || "0x0000000000000000000000000000000000000000",
+    network,
   })
   
   // Fetch staked balance
@@ -54,6 +57,7 @@ export default function StakingInterface() {
     refetch: refetchStakedBalance,
   } = useStakedBalance({
     address: address || "0x0000000000000000000000000000000000000000",
+    network,
   })
 
   // Check allowance
@@ -61,18 +65,35 @@ export default function StakingInterface() {
     allowance,
     isLoading: isAllowanceLoading,
     refetch: refetchAllowance,
-  } = useAllowance(address, process.env.NEXT_PUBLIC_CONTRACT_MINTER as `0x${string}`)
+  } = useAllowance(
+    address,
+    VARIABLES[network as keyof typeof VARIABLES]?.CONTRACT_MINTER as `0x${string}`,
+    network,
+  )
+
+  // Check unstake allowance
+  const {
+    allowance: unstakeAllowance,
+    isLoading: isUnstakeAllowanceLoading,
+    refetch: refetchUnstakeAllowance,
+  } = useAllowanceUnstake(address, VARIABLES[network as keyof typeof VARIABLES]?.CONTRACT_BURNER as `0x${string}`, network)
   
   // Setup approve hook
   const {
     approve,
     pending: approvePending,
     transaction: approveTxHash,
-  } = useApprove(process.env.NEXT_PUBLIC_CONTRACT_MINTER as `0x${string}`, stakeAmount ? parseEther(stakeAmount) : 0n)
+  } = useApprove(VARIABLES[network as keyof typeof VARIABLES]?.CONTRACT_MINTER as `0x${string}`, stakeAmount ? parseEther(stakeAmount) : 0n, network)
+
+  const {
+    approve: approveUnstake,
+    pending: approveUnstakePending,
+    transaction: approveUnstakeTxHash,
+  } = useApproveUnstake(VARIABLES[network as keyof typeof VARIABLES]?.CONTRACT_BURNER as `0x${string}`, unstakeAmount ? parseEther(unstakeAmount) : 0n, network)
 
   // Fetch max redeemable amount
   const { data: maxRedeemable, refetch: refetchMaxRedeemable } = useReadContract({
-    address: process.env.NEXT_PUBLIC_CONTRACT_BURNER as `0x${string}`,
+    address: VARIABLES[network as keyof typeof VARIABLES]?.CONTRACT_BURNER as `0x${string}`,
     abi: ABI_BURNER,
     functionName: "maxRedeemable",
     query: {
@@ -86,7 +107,7 @@ export default function StakingInterface() {
     isLoading: stakeLoading,
     transaction: stakeTx,
     error: errorStake,
-  } = useStake(stakeAmount ? parseEther(stakeAmount) : 0n, process.env.NEXT_PUBLIC_COMMUNITY_CODE)
+  } = useStake(stakeAmount ? parseEther(stakeAmount) : 0n, VARIABLES[network as keyof typeof VARIABLES]?.COMMUNITY_CODE)
 
   // Setup unstake hook
   const {
@@ -95,7 +116,8 @@ export default function StakingInterface() {
     transaction: unstakeTx,
   } = useUnstake(
     unstakeAmount ? parseEther(unstakeAmount) : 0n,
-    process.env.NEXT_PUBLIC_COMMUNITY_CODE,
+    VARIABLES[network as keyof typeof VARIABLES]?.COMMUNITY_CODE,
+    network
   )
 
   // Calculate unstake info
@@ -131,6 +153,17 @@ export default function StakingInterface() {
     try {
       const amount = parseEther(stakeAmount)
       return allowance >= amount
+    } catch (error) {
+      return false
+    }
+  }
+
+  // Check if amount unstake is approved
+  const isAmountUnstakeApproved = () => {
+    if (!unstakeAmount || !unstakeAllowance) return false
+    try {
+      const amount = parseEther(unstakeAmount)
+      return unstakeAllowance >= amount
     } catch (error) {
       return false
     }
@@ -173,6 +206,18 @@ export default function StakingInterface() {
     useWaitForTransactionReceipt({
       hash: stakeTx,
       query: { enabled: stakeTx !== undefined },
+  })
+
+  const { isLoading: isApprovalUnstakeConfirming, isSuccess: isApprovalUnstakedConfirmed } =
+    useWaitForTransactionReceipt({
+      hash: approveUnstakeTxHash,
+      query: { enabled: approveUnstakeTxHash !== undefined },
+  })
+
+  const { isLoading: isUnstakingConfirming, isSuccess: isUnstakingConfirmed } =
+    useWaitForTransactionReceipt({
+      hash: unstakeTx,
+      query: { enabled: unstakeTx !== undefined },
   })
 
   // Set error from connect hook
@@ -328,12 +373,12 @@ export default function StakingInterface() {
           >
             Stake
           </TabsTrigger>
-          {false && (<TabsTrigger
+          <TabsTrigger
             value="unstake"
             className="text-gray-300 data-[state=active]:bg-gray-700 data-[state=active]:text-white"
           >
             Unstake
-          </TabsTrigger>)}
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="stake">
@@ -466,7 +511,7 @@ export default function StakingInterface() {
           </Card>
         </TabsContent>
 
-       {false && <TabsContent value="unstake">
+       <TabsContent value="unstake">
           <Card className="p-6 bg-gray-900 border-gray-700">
             <h3 className="text-lg font-medium mb-4 text-white">Unstake stELX</h3>
             <div className="space-y-4">
@@ -519,30 +564,82 @@ export default function StakingInterface() {
                 </div>
               )}
 
-              <Button
-                onClick={sendUnstakeTransaction}
-                disabled={!unstakeAmount || unstakeLoading || Number(unstakeAmount) <= 0}
-                className="w-full bg-blue-600 hover:bg-blue-700 text-white"
-              >
-                {unstakeLoading ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    {unstakeLoading ? "Transaction Pending..." : "Confirming..."}
-                  </>
-                ) : (
-                  <>
-                    <ArrowDownRight className="mr-2 h-4 w-4" />
-                    Unstake stELX
-                  </>
-                )}
-              </Button>
+              {isUnstakeAllowanceLoading ? (
+                <div className="flex items-center justify-center py-2">
+                  <Loader2 className="h-5 w-5 animate-spin text-gray-400" />
+                </div>
+              ) : isAmountUnstakeApproved() ? (
+                <>
+                  <div className="flex items-center text-green-400 text-sm mb-2">
+                    <CheckCircle className="h-4 w-4 mr-2" />
+                    Approved to unstake {unstakeAmount} stELX
+                  </div>
+                  <Button
+                    onClick={sendUnstakeTransaction}
+                    disabled={!unstakeAmount || unstakeLoading || Number(unstakeAmount) <= 0}
+                    className="w-full bg-blue-600 hover:bg-blue-700 text-white"
+                  >
+                    {unstakeLoading ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        {unstakeLoading ? "Transaction Pending..." : "Confirming..."}
+                      </>
+                    ) : (
+                      <>
+                        <ArrowDownRight className="mr-2 h-4 w-4" />
+                        Unstake stELX
+                      </>
+                    )}
+                  </Button>
+                </>
+              ) : (
+                <>
+                  <Alert className="bg-blue-900/20 border-blue-800 mb-2">
+                    <AlertDescription className="text-blue-300">
+                      You need to approve the contract to spend your stELX tokens before unstaking.
+                    </AlertDescription>
+                  </Alert>
+                  <Button
+                    onClick={approveUnstake}
+                    disabled={!unstakeAmount || approveUnstakePending || Number(unstakeAmount) <= 0 || isApprovalUnstakeConfirming}
+                    className="w-full bg-green-600 hover:bg-green-700 text-white"
+                  >
+                    {approveUnstakePending ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        {approveUnstakePending ? "Approval Pending..." : "Confirming..."}
+                      </>
+                    ) : (
+                      "Approve stELX"
+                    )}
+                  </Button>
+                </>
+              )}
 
-              {false && (
+              {(isApprovalUnstakeConfirming || isUnstakingConfirming) && <div>Waiting for confirmation...</div>}
+
+              {isApprovalUnstakedConfirmed && (
+                <Alert className="bg-green-900/20 border-green-800">
+                  <AlertDescription className="flex items-center text-green-300">
+                    Approval confirmed! You can now unstake your stELX tokens.
+                    <a
+                      href={`https://sepolia.etherscan.io/tx/${approveUnstakeTxHash}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="ml-2 text-blue-400 hover:underline flex items-center"
+                    >
+                      View on Explorer <ArrowUpRight className="ml-1 h-3 w-3" />
+                    </a>
+                  </AlertDescription>
+                </Alert>
+              )}
+
+              {isUnstakingConfirmed && (
                 <Alert className="bg-green-900/20 border-green-800">
                   <AlertDescription className="flex items-center text-green-300">
                     Transaction confirmed!
                     <a
-                      href={`https://sepolia.etherscan.io/tx/${false}`}
+                      href={`https://sepolia.etherscan.io/tx/${unstakeTx}`}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="ml-2 text-blue-400 hover:underline flex items-center"
@@ -555,20 +652,7 @@ export default function StakingInterface() {
             </div>
           </Card>
         </TabsContent>
-      }
       </Tabs>
-
-      {false && (<Card className="p-6 bg-gray-900 border-gray-700">
-        <h3 className="text-lg font-medium mb-4 text-white">Unstake Requests</h3>
-        <p className="text-gray-300 text-sm mb-4">
-          View and claim your pending unstake requests. Unstake requests are processed when there are sufficient tokens
-          available in the protocol.
-        </p>
-        <Button variant="outline" className="w-full text-white border-gray-600 hover:bg-gray-800" disabled>
-          View Unstake Requests
-        </Button>
-      </Card>
-      )}
     </div>
   )
 }
