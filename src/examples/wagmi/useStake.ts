@@ -2,8 +2,9 @@
 
 import { useWriteContract, useAccount } from "wagmi"
 import ABI from "../../abis/minter.json"
+import { VARIABLES } from "@/src/constants"
 
-const useStake = (inputAmount: bigint, communityCode = "") => {
+const useStake = (inputAmount: bigint, communityCode = "", network: string) => {
   const { address } = useAccount()
   const args = [address, inputAmount, communityCode]
 
@@ -20,7 +21,7 @@ const useStake = (inputAmount: bigint, communityCode = "") => {
     console.log("useMinterToStake sendTransaction")
     if (writeContract) {
       writeContract({
-        address: process.env.NEXT_PUBLIC_CONTRACT_MINTER as `0x${string}`,
+        address: VARIABLES[network as keyof typeof VARIABLES]?.CONTRACT_MINTER as `0x${string}`,
         abi: ABI,
         functionName: "mint",
         args,
