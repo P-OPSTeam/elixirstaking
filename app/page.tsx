@@ -5,6 +5,8 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 import { config } from "@/src/examples/wagmi/config"
 import StakingInterface from "@/components/staking-interface"
 import { useState, useEffect } from "react"
+import { mainnet, sepolia } from "viem/chains"
+import NetworkSwitch from '@/components/network-switch'
 
 export default function Home() {
   // Create a client
@@ -14,10 +16,10 @@ export default function Home() {
   const [isMounted, setIsMounted] = useState(false)
   const [network, setNetwork] = useState("mainnet")
 
-  const handleNetworkSwitch = () => {
-    if (network === "mainnet") {
+  const handleNetworkSwitch = (chainId: number) => {
+    if (chainId === sepolia.id) {
       setNetwork("testnet")
-    } else {
+    } else if (chainId === mainnet.id) {
       setNetwork("mainnet")
     }
   }
@@ -46,15 +48,7 @@ export default function Home() {
             <div className="flex justify-between items-center mb-8">
               <img src="/logo-pops.png" alt="Pops Logo" className="h-16" />
               <h1 className="text-2xl text-center text-white">Still in development, use at your own risk</h1>
-                <div className="flex flex-col items-start space-y-2">
-                  <button
-                    className="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600"
-                    onClick={handleNetworkSwitch}
-                  >
-                    Switch network
-                  </button>
-                  <span>Current network: {network}</span>
-                </div>
+              <NetworkSwitch onNetworkSwitch={handleNetworkSwitch} />
             </div>
             <h1 className="text-4xl font-bold text-center mb-2 text-white">stELX Staking</h1>
             <p className="text-center text-gray-300 mb-12">Stake your ELX tokens and earn rewards</p>

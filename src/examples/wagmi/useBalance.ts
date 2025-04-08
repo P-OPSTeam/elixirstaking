@@ -8,7 +8,7 @@ import { VARIABLES } from "@/src/constants"
 export const useStakedBalance = ({ address, network }: { address: `0x${string}`, network: string }) => {
   const [balance, setBalance] = useState<bigint | null>(0n)
   const [hasError, setHasError] = useState<boolean>(false)
-
+  
   const { data, isLoading, refetch } = useReadContract({
     address: VARIABLES[network as keyof typeof VARIABLES]?.CONTRACT_STAKED_TOKEN as `0x${string}`,
     abi: ABI_STELX,
@@ -19,8 +19,9 @@ export const useStakedBalance = ({ address, network }: { address: `0x${string}`,
     }
   })
 
+
   useEffect(() => {
-    if (data) {
+    if (data !== undefined) {
       setBalance(data as bigint)
       setHasError(false)
     }
