@@ -107,7 +107,7 @@ export default function StakingInterface({ network }: { network: string }) {
     isLoading: stakeLoading,
     transaction: stakeTx,
     error: errorStake,
-  } = useStake(stakeAmount ? parseEther(stakeAmount) : 0n, VARIABLES[network as keyof typeof VARIABLES]?.COMMUNITY_CODE)
+  } = useStake(stakeAmount ? parseEther(stakeAmount) : 0n, VARIABLES[network as keyof typeof VARIABLES]?.COMMUNITY_CODE, network)
 
   // Setup unstake hook
   const {
