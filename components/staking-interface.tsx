@@ -17,6 +17,7 @@ import ABI_BURNER from "@/src/abis/burner.json"
 import { useAllowance, useApprove } from "@/src/examples/wagmi/useApprove"
 import { useAllowanceUnstake, useApproveUnstake } from "@/src/examples/wagmi/useApproveUnstake"
 import { VARIABLES } from "@/src/constants"
+import { mainnet, sepolia } from "viem/chains"
 
 export default function StakingInterface({ network }: { network: string }) {
   const { address, isConnected } = useAccount()
@@ -25,6 +26,7 @@ export default function StakingInterface({ network }: { network: string }) {
 
   const [walletError, setWalletError] = useState<string | null>(null)
   const [isMetaMaskInstalled, setIsMetaMaskInstalled] = useState<boolean>(false)
+  const [explorer, setExplorer] = useState("")
   const [stakeAmount, setStakeAmount] = useState("")
   const [unstakeAmount, setUnstakeAmount] = useState("")
   const [unstakeInfo, setUnstakeInfo] = useState<{
@@ -122,10 +124,10 @@ export default function StakingInterface({ network }: { network: string }) {
 
   // Calculate unstake info
   const calculateUnstake = (amount: string) => {
-    if (!amount || !isConnected || !maxRedeemable) return
+    if (!isConnected || !maxRedeemable) return
 
     try {
-      const inputAmount = parseEther(amount)
+      const inputAmount = parseEther(amount || "0")
       const instantlyBurnableAmount = maxRedeemable as bigint
 
       let instantUnstakeAmount = 0n
@@ -168,6 +170,8 @@ export default function StakingInterface({ network }: { network: string }) {
       return false
     }
   }
+
+  const maxUnstakeAmount = ((stakedBalance as bigint) && (maxRedeemable as bigint)) ? ((stakedBalance as bigint) < (maxRedeemable as bigint) ? stakedBalance as bigint : maxRedeemable as bigint) : 0n
 
   // Handle connect wallet click
   const handleConnectWallet = async () => {
@@ -234,9 +238,10 @@ export default function StakingInterface({ network }: { network: string }) {
       refetchMaxRedeemable()
       refetchStakedBalance()
       refetchAllowance()
+      refetchUnstakeAllowance()
       refetchBalance()
     }
-  }, [isConnected, refetchMaxRedeemable, refetchBalance, refetchStakedBalance, refetchAllowance()])
+  }, [isConnected, refetchMaxRedeemable, refetchBalance, refetchStakedBalance, refetchAllowance, refetchUnstakeAllowance])
 
   // Calculate unstake info when amount changes
   useEffect(() => {
@@ -254,15 +259,48 @@ export default function StakingInterface({ network }: { network: string }) {
   ])
 
   useEffect(() => {
+    if (isApprovalUnstakedConfirmed) {
+      refetchUnstakeAllowance()
+    }
+  }, [
+    isApprovalUnstakedConfirmed,
+    refetchUnstakeAllowance,
+  ])
+
+  useEffect(() => {
     if (isStakingConfirmed) {
       refetchStakedBalance()
       refetchAllowance()
       refetchBalance()
+      refetchUnstakeAllowance()
+      refetchMaxRedeemable()
       setStakeAmount("")
     }
   }, [
     isStakingConfirmed,
   ])
+
+  useEffect(() => {
+    if (isUnstakingConfirmed) {
+      refetchStakedBalance()
+      refetchAllowance()
+      refetchBalance()
+      refetchUnstakeAllowance()
+      refetchMaxRedeemable()
+      setStakeAmount("")
+      setUnstakeAmount("")
+    }
+  }, [
+    isUnstakingConfirmed,
+  ])
+
+  useEffect(() => {
+    if (network === "mainnet") {
+      setExplorer(mainnet.blockExplorers.default.url)
+    } else if (network === "testnet") {
+      setExplorer(sepolia.blockExplorers.default.url)
+    }
+  }, [network])
 
   if (!isConnected) {
     return (
@@ -415,7 +453,7 @@ export default function StakingInterface({ network }: { network: string }) {
                     variant="ghost"
                     size="sm"
                     className="absolute right-2 top-1/2 transform -translate-y-1/2 text-xs text-gray-300"
-                    onClick={() => setStakeAmount(balance?.toString() || "0")}
+                    onClick={() => setStakeAmount(balance ? formatEther(balance) : "0")}
                   >
                     MAX
                   </Button>
@@ -481,7 +519,7 @@ export default function StakingInterface({ network }: { network: string }) {
                   <AlertDescription className="flex items-center text-green-300">
                     Approval confirmed! You can now stake your ELX tokens.
                     <a
-                      href={`https://sepolia.etherscan.io/tx/${approveTxHash}`}
+                      href={`${explorer}/tx/${approveTxHash}`}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="ml-2 text-blue-400 hover:underline flex items-center"
@@ -497,7 +535,7 @@ export default function StakingInterface({ network }: { network: string }) {
                   <AlertDescription className="flex items-center text-green-300">
                     Transaction confirmed!
                     <a
-                      href={`https://sepolia.etherscan.io/tx/${stakeTx}`}
+                      href={`${explorer}/tx/${stakeTx}`}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="ml-2 text-blue-400 hover:underline flex items-center"
@@ -521,7 +559,7 @@ export default function StakingInterface({ network }: { network: string }) {
                     Amount to Unstake
                   </label>
                   <span className="text-xs text-gray-400">
-                    Max Instant: {maxRedeemable ? formatEther(maxRedeemable as bigint) : "0"} ELX
+                    Max to unstake: {formatEther(((stakedBalance as bigint) && (maxRedeemable as bigint)) ? ((stakedBalance as bigint) < (maxRedeemable as bigint) ? stakedBalance as bigint : maxRedeemable as bigint) : 0n)} ELX
                   </span>
                 </div>
                 <div className="relative">
@@ -537,32 +575,17 @@ export default function StakingInterface({ network }: { network: string }) {
                     variant="ghost"
                     size="sm"
                     className="absolute right-2 top-1/2 transform -translate-y-1/2 text-xs text-gray-300"
-                    onClick={() => stakedBalance && setUnstakeAmount(formatEther(stakedBalance))}
+                    onClick={() => stakedBalance && setUnstakeAmount(formatEther(((stakedBalance as bigint) && (maxRedeemable as bigint)) ? ((stakedBalance as bigint) < (maxRedeemable as bigint) ? stakedBalance as bigint : maxRedeemable as bigint) : 0n))}
                   >
                     MAX
                   </Button>
                 </div>
+                {Number(unstakeAmount) > Number(formatEther(maxUnstakeAmount)) && (
+                  <div className="text-red-500 text-xs mt-1">
+                    Amount exceeds max unstake limit: {formatEther(maxUnstakeAmount)} stELX
+                    </div>
+                )}
               </div>
-
-              {unstakeAmount && Number(unstakeAmount) > 0 && (
-                <div className="p-3 bg-gray-800 rounded-md text-sm">
-                  <div className="flex justify-between mb-2">
-                    <span className="text-gray-300">Instant Unstake:</span>
-                    <span className="text-white">{formatEther(unstakeInfo.instantUnstakeAmount)} ELX</span>
-                  </div>
-                  <div className="flex justify-between mb-2">
-                    <span className="text-gray-300">Delayed Unstake:</span>
-                    <span className="text-white">{formatEther(unstakeInfo.unstakeRequestAmount)} ELX</span>
-                  </div>
-                  <Progress
-                    value={
-                      (Number(unstakeInfo.instantUnstakeAmount) * 100) /
-                      (Number(unstakeInfo.instantUnstakeAmount) + Number(unstakeInfo.unstakeRequestAmount) || 1)
-                    }
-                    className="h-1.5 mt-2 bg-gray-700"
-                  />
-                </div>
-              )}
 
               {isUnstakeAllowanceLoading ? (
                 <div className="flex items-center justify-center py-2">
@@ -576,7 +599,7 @@ export default function StakingInterface({ network }: { network: string }) {
                   </div>
                   <Button
                     onClick={sendUnstakeTransaction}
-                    disabled={!unstakeAmount || unstakeLoading || Number(unstakeAmount) <= 0}
+                    disabled={!unstakeAmount || unstakeLoading || Number(unstakeAmount) <= 0 || Number(unstakeAmount) > Number(formatEther(maxUnstakeAmount))}
                     className="w-full bg-blue-600 hover:bg-blue-700 text-white"
                   >
                     {unstakeLoading ? (
@@ -601,7 +624,7 @@ export default function StakingInterface({ network }: { network: string }) {
                   </Alert>
                   <Button
                     onClick={approveUnstake}
-                    disabled={!unstakeAmount || approveUnstakePending || Number(unstakeAmount) <= 0 || isApprovalUnstakeConfirming}
+                    disabled={!unstakeAmount || approveUnstakePending || Number(unstakeAmount) <= 0 || isApprovalUnstakeConfirming || Number(unstakeAmount) > Number(formatEther(maxUnstakeAmount))}
                     className="w-full bg-green-600 hover:bg-green-700 text-white"
                   >
                     {approveUnstakePending ? (
@@ -623,7 +646,7 @@ export default function StakingInterface({ network }: { network: string }) {
                   <AlertDescription className="flex items-center text-green-300">
                     Approval confirmed! You can now unstake your stELX tokens.
                     <a
-                      href={`https://sepolia.etherscan.io/tx/${approveUnstakeTxHash}`}
+                      href={`${explorer}/tx/${approveUnstakeTxHash}`}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="ml-2 text-blue-400 hover:underline flex items-center"
@@ -639,7 +662,7 @@ export default function StakingInterface({ network }: { network: string }) {
                   <AlertDescription className="flex items-center text-green-300">
                     Transaction confirmed!
                     <a
-                      href={`https://sepolia.etherscan.io/tx/${unstakeTx}`}
+                      href={`${explorer}/tx/${unstakeTx}`}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="ml-2 text-blue-400 hover:underline flex items-center"
